@@ -1,0 +1,53 @@
+.autorizate_to_gitlab: &autorizate_to_gitlab |
+  docker logout $CI_REGISTRY
+  docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+.git_tag_variable: &git_tag_variable |
+  git fetch --tags
+  export TAG=$(git describe --tags --abbrev=0)
+  echo $TAG
+
+
+.golden_image:
+  before_script:
+    - *autorizate_to_gitlab
+    - *git_tag_variable
+  script:
+    - docker build -f Dockerfile.golden -t $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME:golden_image .
+    - docker push $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME:golden_image
+  tags:
+    - shell98
+  when: manual
+
+
+.build-service:
+  before_script:
+    - *autorizate_to_gitlab
+    - *git_tag_variable
+  script:
+    - docker build -f Dockerfile.service --build-arg GOLDENIMAGE=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME:golden_image -t $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME:$TAG .
+    - docker push $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME:$TAG
+  tags:
+    - build-runner
+  when: manual
+
+.build-celery:
+  before_script:
+    - *autorizate_to_gitlab
+    - *git_tag_variable
+  script:
+    - docker build -f Dockerfile.celery --build-arg GOLDENIMAGE=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME:golden_image -t $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME:$TAG-celery .
+    - docker push $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME:$TAG-celery
+  tags:
+    - build-runner
+  when: manual
+
+.build-celery-beat:
+  before_script:
+    - *autorizate_to_gitlab
+    - *git_tag_variable
+  script:
+    - docker build -f Dockerfile.celery_beat --build-arg GOLDENIMAGE=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME:golden_image -t $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME:$TAG-celery-beat .
+    - docker push $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME:$TAG-celery-beat
+  tags:
+    - build-runner
+  when: manual

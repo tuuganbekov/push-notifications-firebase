@@ -1,0 +1,121 @@
+# Ключ по которому будут подтягиваться переменные секретов
+prod: false
+
+#Основные переменные
+#неймспейс в котором запускаемся
+namespace: mega24-test
+#имя деплоймента
+deployment_name: push-notification-firebase-celery-test
+#Порты
+deployment_port: 8000
+service_port: 8000
+#имя сервиса
+service_name: push-notification-firebase-celery-test
+#количество реплик деплоймента минимальное количество
+replica_number: 1
+#имя лейбла сервиса
+app_name: push-notification-firebase-celery-test
+
+#Service
+service:
+  enabled: true
+
+#Настройка ingress
+ingress:
+  enabled: false
+  #имя ingress
+  ingress_name: ingress-push-notification-firebase-celery-test
+  #указываем наш домен по которому будет слушать ingres
+  domain: push-notification-firebase-celery-test.test.megacom.local
+
+#Дополнительные переменные
+#Переменные. Добавляются динамически, если добавить их в блок ниже
+env:
+  # my_version: 123
+  # my_env: 321
+#Переменные через абстракцию секретов. В нем указываются не сами серкреты, а указание к ключам по которым можно найти само значение
+secret_var:
+  enabled: false
+  secrets:
+    MY_PASSWORD: password
+    MY_USERNAME: username
+
+
+#Подтягивание значений с hashicorp vault
+vaultannotations:
+  enabled: true
+  vault_role: "k8s-test-policy"
+  vault_secret: "k8s-test-secrets/mega24/push-notification-firebase-celery-test"
+
+#Команда для старта
+command: '["celery", "-A", "config", "worker", "-l", "INFO"]'
+
+#Настройка автоскейлинга
+hpa:
+  enabled: false
+  updelay: 60
+  cpuutil: 200
+  minreplicas: 1
+  maxreplicas: 3
+
+#Внешние настройки хранения данных и секретов
+volume:
+  enabled: false
+  nfs:
+    enabled: false
+    storage_name: my-storage
+    storage_service_path: /opt/data/
+    storage_size: 8Gi
+    storageclass: nfs-client
+    server: NFS_SERVER_IP
+    path: /nfs/prod_vsrv_kubernetes/ns/svc
+  configmap:
+    enabled: false
+    name: my-configmap
+    path: /my-config/
+
+
+#имя образа для сервиса
+image_app:
+  repository: registry.example.com:4567/my-svc/push-notification-firebase-celery-test
+  tag: "v1"
+
+resources:
+  #количество ресурсов которые резервируются для pod на ноде проц и оперативка
+  requests_cpu_app: 50m
+  requests_memory_app: 64Mi
+  #количество ресурсов которые pod может использовать(верхняя граница)
+  limits:
+    enabled: false
+    limits_cpu_app: 100m
+    limits_memory_app: 128Mi
+
+#включаем или выключаем livenessProbe readinessProbe
+readinessProbe:
+  enabled: false
+  failureThreshold: 3
+  path: /swagger-ui.html#/auth/checkUsingGET
+  port: 8095
+  periodSeconds: 20
+  successThreshold: 1
+  timeoutSeconds: 1
+  initialDelaySeconds: 300
+
+livenessProbe:
+  enabled: false
+  failurethreshold: 3
+  path: /admin/login/?next=/admin/
+  port: 8000
+  scheme: HTTP
+  periodseconds: 20
+  successthreshold: 1
+  timeoutseconds: 1
+  initialdelayseconds: 30
+
+
+#имя секрета под которым воркер ноды будут выкачивать образа из gitlab
+secret_name_gitlab_login: gitlab-deploy-token-push-notification-firebase-celery-test
+
+
+
+

@@ -1,0 +1,10 @@
+djangorestframework==3.15.1
+pypi==2.1
+pyfcm==1.5.4
+django==5.0.6
+psycopg2==2.9.9
+firebase-admin==6.5.0
+google-auth==2.29.0
+requests==2.32.2
+gunicorn==22.0.0
+celery==5.4.0

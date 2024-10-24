@@ -1,0 +1,25 @@
+.stop_service_prod:
+  tags:
+    - shell98
+  before_script:
+    - mkdir -p `echo $kubeconfig_url | awk -F '/' 'sub(FS $NF,x)'`
+    - echo $kubeconfig | base64 -d > $kubeconfig_url
+  script:
+    - kubectl --kubeconfig=$kubeconfig_url scale --replicas=0 deployment $CI_PROJECT_NAME -n $NAMESPACE_PROD
+  after_script:
+    - kubectl --kubeconfig=$kubeconfig_url get pod -n $NAMESPACE_PROD
+    - rm -rf $kubeconfig_url
+  when: manual
+
+.stop_service_test:
+  tags:
+    - shell98
+  before_script:
+    - mkdir -p `echo $kubeconfig_url | awk -F '/' 'sub(FS $NF,x)'`
+    - echo $kubeconfig | base64 -d > $kubeconfig_url
+  script:
+    - kubectl --kubeconfig=$kubeconfig_url scale --replicas=0 deployment $CI_PROJECT_NAME -n $NAMESPACE_TEST
+  after_script:
+    - kubectl --kubeconfig=$kubeconfig_url get pod -n $NAMESPACE_TEST
+    - rm -rf $kubeconfig_url
+  when: manual

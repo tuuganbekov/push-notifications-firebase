@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mega24</title>
+</head>
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+    }
+    body {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    header {
+        height: 50px;
+        width: 100%;
+        background-color: black;
+        color: white;
+        text-align: center;
+    }
+    main {
+        border: 1px solid black;
+        width: 600px;
+        margin-top: 20px;
+    }
+    main h1 {
+        text-align: center;
+    }
+    form div {
+        margin: 20px 10px;
+        display: flex;
+        flex-direction: column;
+    }
+    #btn {
+        margin: 20px 10px 10px;
+        width: 580px;
+        height: 25px;
+        cursor: pointer;
+    }
+</style>
+<body>
+    <header>
+        <h1>Mega24 push уведомления</h1>
+    </header>
+    <main>
+        <h1>Уведомление успешно создано!</h1>
+        <form action="{% url 'create' %}" method="get">
+            <button type="submit" id="btn">Вернуться домой</button>
+        </form>
+    </main>
+</body>
+</html>

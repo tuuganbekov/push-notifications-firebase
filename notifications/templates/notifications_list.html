@@ -1,0 +1,12 @@
+
+{% extends 'index.html' %}
+
+{% block content %}
+<main class="main">
+  {% for item in model_list %}
+    <div class="notifications-list">
+      <a href="{% url 'detail' item.pk %}">{{item.title}}</a>
+    </div>
+  {% endfor %}
+</main>
+{% endblock content %}

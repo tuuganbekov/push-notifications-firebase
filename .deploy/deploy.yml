@@ -1,0 +1,189 @@
+.autorizate_to_gitlab: &autorizate_to_gitlab |
+  docker logout $CI_REGISTRY
+  docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+.git_tag_variable: &git_tag_variable |
+  git fetch --tags
+  export TAG=$(git describe --tags --abbrev=0)
+  echo $TAG
+
+.deploy_prod:
+  stage: deploy_prod
+  cache: {}
+  dependencies: []
+  tags:
+    - shell98
+  only:
+    - master
+  before_script:
+    - *autorizate_to_gitlab
+    - *git_tag_variable
+    - mkdir -p `echo $kubeconfig_url | awk -F '/' 'sub(FS $NF,x)'`
+    - echo $kubeconfig | base64 -d > $kubeconfig_url
+    - kubectl create namespace $NAMESPACE_PROD --kubeconfig=$kubeconfig_url || echo "all OK - namespace =  $NAMESPACE_PROD alredy exist"
+    - kubectl --kubeconfig=$kubeconfig_url delete secret docker-login-$CI_PROJECT_NAME -n $NAMESPACE_PROD || echo "error secret not exist"
+    - kubectl --kubeconfig=$kubeconfig_url create secret docker-registry docker-login-$CI_PROJECT_NAME --docker-server="$CI_REGISTRY" --docker-username="$CI_DEPLOY_USER" --docker-password="$CI_DEPLOY_PASSWORD" --docker-email="$GITLAB_USER_EMAIL" -n $NAMESPACE_PROD
+  script:
+    - kubectl --kubeconfig=$kubeconfig_url get secret -n $NAMESPACE_PROD
+    - helm upgrade --recreate-pods --install --atomic --timeout 4m
+      --kubeconfig=$kubeconfig_url -n $NAMESPACE_PROD $CI_PROJECT_NAME  .deploy/helm/
+      --values .deploy/helm/values.yaml
+      --set-string image_app.repository=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
+      --set-string image_app.tag=$TAG
+      --set-string namespace=$NAMESPACE_PROD
+      --set-string secret_name_gitlab_login=docker-login-$CI_PROJECT_NAME
+  after_script:
+    - kubectl --kubeconfig=$kubeconfig_url get pod $CI_PROJECT_NAME -n $NAMESPACE_PROD
+    - rm -rf $kubeconfig_url
+  when: manual
+
+
+.deploy_test:
+  stage: deploy_test
+  cache: {}
+  dependencies: []
+  only:
+    - dev
+  tags:
+    - shell98
+  before_script:
+    - *autorizate_to_gitlab
+    - *git_tag_variable
+    - mkdir -p `echo $kubeconfig_url | awk -F '/' 'sub(FS $NF,x)'`
+    - echo $kubeconfig | base64 -d > $kubeconfig_url
+    - kubectl create namespace $NAMESPACE_TEST --kubeconfig=$kubeconfig_url || echo "all OK - namespace =  $NAMESPACE_TEST alredy exist"
+    - kubectl --kubeconfig=$kubeconfig_url delete secret docker-login-$CI_PROJECT_NAME -n $NAMESPACE_TEST || echo "error secret not exist"
+    - kubectl --kubeconfig=$kubeconfig_url create secret docker-registry docker-login-$CI_PROJECT_NAME --docker-server="$CI_REGISTRY" --docker-username="$CI_DEPLOY_USER" --docker-password="$CI_DEPLOY_PASSWORD" --docker-email="$GITLAB_USER_EMAIL" -n $NAMESPACE_TEST
+  script:
+    - kubectl --kubeconfig=$kubeconfig_url get secret -n $NAMESPACE_TEST
+    - helm upgrade --recreate-pods --install --atomic --timeout 4m
+      --kubeconfig=$kubeconfig_url -n $NAMESPACE_TEST $CI_PROJECT_NAME  .deploy/helm/
+      --values .deploy/helm/values_test.yaml
+      --set-string image_app.repository=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
+      --set-string image_app.tag=$TAG
+      --set-string namespace=$NAMESPACE_TEST
+      --set-string secret_name_gitlab_login=docker-login-$CI_PROJECT_NAME
+  after_script:
+    - kubectl --kubeconfig=$kubeconfig_url get pod $CI_PROJECT_NAME -n $NAMESPACE_TEST
+    - rm -rf $kubeconfig_url
+  when: manual
+
+.deploy_celery_test:
+  stage: deploy_test
+  cache: {}
+  dependencies: []
+  only:
+    - dev
+  tags:
+    - shell98
+  before_script:
+    - *autorizate_to_gitlab
+    - *git_tag_variable
+    - mkdir -p `echo $kubeconfig_url | awk -F '/' 'sub(FS $NF,x)'`
+    - echo $kubeconfig | base64 -d > $kubeconfig_url
+    - kubectl create namespace $NAMESPACE_TEST --kubeconfig=$kubeconfig_url || echo "all OK - namespace =  $NAMESPACE_TEST alredy exist"
+    - kubectl --kubeconfig=$kubeconfig_url delete secret docker-login-$CI_PROJECT_NAME -n $NAMESPACE_TEST || echo "error secret not exist"
+    - kubectl --kubeconfig=$kubeconfig_url create secret docker-registry docker-login-$CI_PROJECT_NAME --docker-server="$CI_REGISTRY" --docker-username="$CI_DEPLOY_USER" --docker-password="$CI_DEPLOY_PASSWORD" --docker-email="$GITLAB_USER_EMAIL" -n $NAMESPACE_TEST
+  script:
+    - kubectl --kubeconfig=$kubeconfig_url get secret -n $NAMESPACE_TEST
+    - helm upgrade --recreate-pods --install --atomic --timeout 4m
+      --kubeconfig=$kubeconfig_url -n $NAMESPACE_TEST $CI_PROJECT_NAME-celery  .deploy/helm/
+      --values .deploy/helm/values_celery_test.yaml
+      --set-string image_app.repository=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
+      --set-string image_app.tag=$TAG-celery
+      --set-string namespace=$NAMESPACE_TEST
+      --set-string secret_name_gitlab_login=docker-login-$CI_PROJECT_NAME
+  after_script:
+    - kubectl --kubeconfig=$kubeconfig_url get pod $CI_PROJECT_NAME-celery -n $NAMESPACE_TEST
+    - rm -rf $kubeconfig_url
+  when: manual
+
+.deploy_celery_prod:
+  stage: deploy_prod
+  cache: {}
+  dependencies: []
+  only:
+    - dev
+  tags:
+    - shell98
+  before_script:
+    - *autorizate_to_gitlab
+    - *git_tag_variable
+    - mkdir -p `echo $kubeconfig_url | awk -F '/' 'sub(FS $NF,x)'`
+    - echo $kubeconfig | base64 -d > $kubeconfig_url
+    - kubectl create namespace $NAMESPACE_PROD --kubeconfig=$kubeconfig_url || echo "all OK - namespace =  $NAMESPACE_PROD alredy exist"
+    - kubectl --kubeconfig=$kubeconfig_url delete secret docker-login-$CI_PROJECT_NAME -n $NAMESPACE_PROD || echo "error secret not exist"
+    - kubectl --kubeconfig=$kubeconfig_url create secret docker-registry docker-login-$CI_PROJECT_NAME --docker-server="$CI_REGISTRY" --docker-username="$CI_DEPLOY_USER" --docker-password="$CI_DEPLOY_PASSWORD" --docker-email="$GITLAB_USER_EMAIL" -n $NAMESPACE_PROD
+  script:
+    - kubectl --kubeconfig=$kubeconfig_url get secret -n $NAMESPACE_PROD
+    - helm upgrade --recreate-pods --install --atomic --timeout 4m
+      --kubeconfig=$kubeconfig_url -n $NAMESPACE_PROD $CI_PROJECT_NAME-celery .deploy/helm/
+      --values .deploy/helm/values_celery.yaml
+      --set-string image_app.repository=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
+      --set-string image_app.tag=$TAG-celery
+      --set-string namespace=$NAMESPACE_PROD
+      --set-string secret_name_gitlab_login=docker-login-$CI_PROJECT_NAME
+  after_script:
+    - kubectl --kubeconfig=$kubeconfig_url get pod $CI_PROJECT_NAME-celery -n $NAMESPACE_PROD
+    - rm -rf $kubeconfig_url
+  when: manual
+
+.deploy_celery_beat_test:
+  stage: deploy_test
+  cache: {}
+  dependencies: []
+  only:
+    - dev
+  tags:
+    - shell98
+  before_script:
+    - *autorizate_to_gitlab
+    - *git_tag_variable
+    - mkdir -p `echo $kubeconfig_url | awk -F '/' 'sub(FS $NF,x)'`
+    - echo $kubeconfig | base64 -d > $kubeconfig_url
+    - kubectl create namespace $NAMESPACE_TEST --kubeconfig=$kubeconfig_url || echo "all OK - namespace =  $NAMESPACE_TEST alredy exist"
+    - kubectl --kubeconfig=$kubeconfig_url delete secret docker-login-$CI_PROJECT_NAME -n $NAMESPACE_TEST || echo "error secret not exist"
+    - kubectl --kubeconfig=$kubeconfig_url create secret docker-registry docker-login-$CI_PROJECT_NAME --docker-server="$CI_REGISTRY" --docker-username="$CI_DEPLOY_USER" --docker-password="$CI_DEPLOY_PASSWORD" --docker-email="$GITLAB_USER_EMAIL" -n $NAMESPACE_TEST
+  script:
+    - kubectl --kubeconfig=$kubeconfig_url get secret -n $NAMESPACE_TEST
+    - helm upgrade --recreate-pods --install --atomic --timeout 4m
+      --kubeconfig=$kubeconfig_url -n $NAMESPACE_TEST $CI_PROJECT_NAME-celery-beat  .deploy/helm/
+      --values .deploy/helm/values_celery_beat_test.yaml
+      --set-string image_app.repository=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
+      --set-string image_app.tag=$TAG-celery-beat
+      --set-string namespace=$NAMESPACE_TEST
+      --set-string secret_name_gitlab_login=docker-login-$CI_PROJECT_NAME
+  after_script:
+    - kubectl --kubeconfig=$kubeconfig_url get pod $CI_PROJECT_NAME-celery-beat -n $NAMESPACE_TEST
+    - rm -rf $kubeconfig_url
+  when: manual
+
+.deploy_celery_beat_prod:
+  stage: deploy_prod
+  cache: {}
+  dependencies: []
+  only:
+    - dev
+  tags:
+    - shell98
+  before_script:
+    - *autorizate_to_gitlab
+    - *git_tag_variable
+    - mkdir -p `echo $kubeconfig_url | awk -F '/' 'sub(FS $NF,x)'`
+    - echo $kubeconfig | base64 -d > $kubeconfig_url
+    - kubectl create namespace $NAMESPACE_PROD --kubeconfig=$kubeconfig_url || echo "all OK - namespace =  $NAMESPACE_PROD alredy exist"
+    - kubectl --kubeconfig=$kubeconfig_url delete secret docker-login-$CI_PROJECT_NAME -n $NAMESPACE_PROD || echo "error secret not exist"
+    - kubectl --kubeconfig=$kubeconfig_url create secret docker-registry docker-login-$CI_PROJECT_NAME --docker-server="$CI_REGISTRY" --docker-username="$CI_DEPLOY_USER" --docker-password="$CI_DEPLOY_PASSWORD" --docker-email="$GITLAB_USER_EMAIL" -n $NAMESPACE_PROD
+  script:
+    - kubectl --kubeconfig=$kubeconfig_url get secret -n $NAMESPACE_PROD
+    - helm upgrade --recreate-pods --install --atomic --timeout 4m
+      --kubeconfig=$kubeconfig_url -n $NAMESPACE_PROD $CI_PROJECT_NAME-celery-beat  .deploy/helm/
+      --values .deploy/helm/values_celery_beat.yaml
+      --set-string image_app.repository=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
+      --set-string image_app.tag=$TAG-celery-beat
+      --set-string namespace=$NAMESPACE_PROD
+      --set-string secret_name_gitlab_login=docker-login-$CI_PROJECT_NAME
+  after_script:
+    - kubectl --kubeconfig=$kubeconfig_url get pod $CI_PROJECT_NAME-celery-beat -n $NAMESPACE_PROD
+    - rm -rf $kubeconfig_url
+  when: manual
+

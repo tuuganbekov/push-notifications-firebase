@@ -1,0 +1,145 @@
+# Создание сервисного аккаунта для взаимодействия с hashicorp vault
+{{- if .Values.vaultannotations.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.app_name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.app_name }}
+{{- end}}
+---
+# Основной сценарий (deployment) разворачивания сервиса
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.deployment_name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.app_name }}
+  annotations:
+    timestamp: "{{ .Release.Time }}"
+    {{- if .Values.vaultannotations.enabled }}
+    vault.hashicorp.com/agent-inject: "true"
+    vault.hashicorp.com/role: "{{ .Values.vaultannotations.vault_role }}"
+    vault.hashicorp.com/agent-limits-cpu: ""
+    vault.hashicorp.com/agent-limits-mem: ""
+    vault.hashicorp.com/agent-requests-cpu: ""
+    vault.hashicorp.com/agent-requests-mem: ""
+    {{- end}}
+spec:
+  replicas: {{ .Values.replica_number }}
+  selector:
+    matchLabels:
+      app: {{ .Values.app_name }} # по вот этому лейблу репликасет цепляет под
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1 
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.app_name }}  # по вот этому лейблу репликасет цепляет под
+      {{- if .Values.vaultannotations.enabled }}
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "{{ .Values.vaultannotations.vault_role }}" # Роль доступа
+        vault.hashicorp.com/agent-inject-secret-env: "{{ .Values.vaultannotations.vault_secret }}" # Путь к секрету
+        vault.hashicorp.com/agent-limits-cpu: ""
+        vault.hashicorp.com/agent-limits-mem: ""
+        vault.hashicorp.com/agent-requests-cpu: ""
+        vault.hashicorp.com/agent-requests-mem: ""    
+      {{- end}}
+    spec:
+      {{- if .Values.vaultannotations.enabled }} # Обращение к сервисному аккаунту через который есть доступ к hashicorp vault
+      serviceAccountName: {{ .Values.app_name }}
+      {{ else }}
+      serviceAccountName: default
+      {{- end }}  
+      # Блок для указания volumes
+      {{- if .Values.volume.enabled }}
+      volumes:
+      {{- if .Values.volume.nfs.enabled }}
+        - name: {{ .Values.volume.nfs.storage_name}} 
+          persistentVolumeClaim:
+            claimName: {{ .Values.volume.nfs.storage_name}}      
+      {{- end }}
+      {{- if .Values.volume.configmap.enabled }}  
+       - name: "{{ .Values.volume.configmap.name }}"
+         configMap:
+           name: "{{ .Values.volume.configmap.name }}"
+       {{- end }}
+       {{- end }}
+      containers:    
+        - image: "{{ .Values.image_app.repository }}:{{ .Values.image_app.tag }}"
+          imagePullPolicy: Always
+          name: {{ .Values.app_name }}
+         # тут начинаются проверки по доступности
+          ports:
+            - containerPort: {{ .Values.deployment_port }}
+          command: {{ .Values.command }}
+          # Монтирование указанных volumes
+          {{- if .Values.volume.enabled }}
+          volumeMounts:
+          {{- if .Values.volume.nfs.enabled }}
+            - mountPath: {{ .Values.volume.nfs.storage_service_path }}
+              name: {{ .Values.volume.nfs.storage_name }}
+          {{- end }}
+          {{- if .Values.volume.configmap.enabled }}  
+          - mountPath: "{{ .Values.volume.configmap.path }}"
+            name: "{{ .Values.volume.configmap.name }}"
+          {{- end }}
+          {{- end }}
+          # Блок для подкидывания переменных
+          env:
+          {{- range $key, $val := .Values.env }}
+           - name: {{ $key }}
+             value: {{ $val | quote }}
+          {{- end }} 
+          {{- if .Values.secret_var.enabled }}
+          {{- range $key, $val := .Values.secret_var.secrets }}
+           - name: {{ $key }}
+             valueFrom:
+               secretKeyRef:     
+                 name: service-secret
+                 key: {{ $val | quote }}            
+          {{- end }}       
+          {{- end }}                  
+          # Блок проверки на жизнь сервиса 
+          {{- if .Values.readinessProbe.enabled }}         
+          readinessProbe: # проверка готово ли приложение
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }} #указывает количество провалов при проверке
+            httpGet:  # по сути дёргает курлом на 8080 порт
+              path: {{ .Values.readinessProbe.path }}
+              port: {{ .Values.readinessProbe.port }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}  #как часто должна проходить проверка (в секундах)
+            successThreshold: {{ .Values.readinessProbe.successThreshold }}  #сбрасывает счётчик неудач, т.е. при 3х проверках если 1 раз успешно прошло, то счётчик сбрасывается и всё ок
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}  #таймаут на выполнение пробы 1 секунда
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+          {{- end}}
+          {{- if .Values.livenessProbe.enabled }}
+          livenessProbe: #проверка на жизнь приложения, живо ли оно
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+            httpGet:
+              path: {{ .Values.livenessProbe.path }}
+              port: {{ .Values.livenessProbe.port }}
+              scheme: {{ .Values.livenessProbe.scheme }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            successThreshold: {{ .Values.livenessProbe.successThreshold }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}  #означает что первую проверку надо сделать только после n секунд
+            {{- end}}
+        # тут начинается описание лимитов для пода
+          resources:
+            requests: #количество ресурсов которые резервируются для pod на ноде
+              cpu: {{ .Values.resources.requests_cpu_app }}
+              memory: {{ .Values.resources.requests_memory_app }}
+            {{- if .Values.resources.limits.enabled }}
+            limits: #количество ресурсов которые pod может использовать(верхняя граница)
+              cpu: {{ .Values.resources.limits.limits_cpu_app }}
+              memory: {{ .Values.resources.limits.limits_memory_app }}
+            {{- end}}
+      # Правило стягивания образа     
+      imagePullSecrets:
+        - name: {{ .Values.secret_name_gitlab_login }}

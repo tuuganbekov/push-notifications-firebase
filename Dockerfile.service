@@ -1,0 +1,6 @@
+ARG GOLDENIMAGE
+FROM $GOLDENIMAGE
+WORKDIR /app
+COPY . /app/
+ENV PATH "/app/.venv/bin:$PATH"
+CMD ["bash", "entrypoint.sh"]

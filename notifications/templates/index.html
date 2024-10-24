@@ -1,0 +1,29 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+    <link rel="stylesheet" href="{% static 'markdownx/css/markdownx.css' %}">
+    <title>Mega24</title>
+</head>
+<style>
+    
+</style>
+<body>
+    <header>
+        <div>
+            <h1>
+                <a href="{% url 'list' %}">Mega24 push уведомления</a>
+            </h1>
+            <ul>
+                <li><a class="header-item" href="{% url 'create' %}">Создать уведомление </a></li>
+                <li><a class="header-item" href="">Создать по регионам / молчащих </a></li>
+            </ul>
+        </div>
+    </header>
+    {% block content %}{% endblock content %}
+    <script src="{% static 'markdownx/js/markdownx.js' %}"></script>
+</body>
+</html>

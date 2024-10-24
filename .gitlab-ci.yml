@@ -1,0 +1,110 @@
+variables:
+  NAMESPACE_PROD: mega24
+  NAMESPACE_TEST: mega24-test
+  kubeconfig_url: /var/opt/home/gitlab-runner/.kube/config
+
+include:
+  - /.deploy/docker-build-service.yml
+  - /.deploy/deploy.yml
+  - /.deploy/stop-service.yml
+  - /.deploy/delete_service.yml
+
+stages:
+  - build
+  - "Deploy Prod"
+  - "Deploy Test"
+  - "Stop Service Prod"
+  - "Stop Service Test"
+  - "Delete Prod"
+  - "Delete Test"
+
+"Golden image":
+  stage: build
+  extends: .golden_image
+  only:
+    - master
+    - dev
+
+"Build Service":
+  stage: build
+  extends: .build-service
+  only:
+    - master
+    - dev
+
+"Build celery":
+  stage: build
+  extends: .build-celery
+  only:
+    - master
+    - dev
+    - uat
+
+"Build celery beat":
+  stage: build
+  extends: .build-celery-beat
+  only:
+    - master
+    - dev
+
+"Deploy prod service":
+  stage: "Deploy Prod"
+  extends: .deploy_prod
+  only:
+    - master
+
+"Deploy_celery_beat":
+  stage: "Deploy Prod"
+  extends: .deploy_celery_beat_prod
+  only:
+    - master
+
+
+"Deploy_celery":
+  stage: "Deploy Prod"
+  extends: .deploy_celery_prod
+  only:
+    - master
+
+"Stop service prod":
+  stage: "Stop Service Prod"
+  extends: .stop_service_prod
+  only:
+    - master
+
+"Delete prod service":
+  stage: "Delete Prod"
+  extends: .delete_service_prod
+  only:
+    - master
+
+"Deploy test service":
+  stage: "Deploy Test"
+  extends: .deploy_test
+  only:
+    - dev
+
+"Deploy_celery_beat_test":
+  stage: "Deploy Test"
+  extends: .deploy_celery_beat_test
+  only:
+    - dev
+
+"Deploy celery test":
+  stage: "Deploy Test"
+  extends: .deploy_celery_test
+  only:
+    - dev
+
+"Stop service test":
+  stage: "Stop Service Test"
+  extends: .stop_service_test
+  only:
+    - dev
+
+"Delete test service":
+  stage: "Delete Test"
+  extends: .delete_service_test
+  only:
+    - dev
+

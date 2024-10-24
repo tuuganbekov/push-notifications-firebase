@@ -1,0 +1,6 @@
+ARG GOLDENIMAGE
+FROM $GOLDENIMAGE
+WORKDIR /celery
+COPY . .
+ENV PATH "/app/.venv/bin:$PATH"
+CMD ["celery", "-A", "config", "worker", "-l", "INFO"]
