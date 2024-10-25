@@ -1,3 +1,6 @@
+import pytz
+from datetime import datetime
+from django.conf import settings
 from firebase_admin import messaging
 
 from loguru_conf import logger
@@ -48,14 +51,25 @@ def create_data_by_topic(
     collection = client["notifications"]
     by_topic = True if topic else False
     doc = {
-        "notification_id": response_id,
+        "response": response_id,
+        "notification_id": data["notification_id"],
         "title": data["title"],
         "push_body": data["body"],
         "sent_subs": [],
         "subs_received": [],
         "by_topic": by_topic,
-        "topic_name": topic
+        "topic_name": topic,
+        "date": datetime.now(pytz.timezone(settings.TIME_ZONE))
     }
     logger.debug(f"Mongo doc: {doc}")
     res = collection.insert_one(doc)
     logger.debug(f"save to mongo: {res}")
+
+
+def get_env(request):
+    host = request.get_host()
+    if "test" in host or "localhost" in host or "127.0.0.1" in host:
+        env = ""
+    else:
+        env = "prod_"
+    return env

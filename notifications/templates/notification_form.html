@@ -3,7 +3,7 @@
 {% block content %}
     <main class="main">
     <h1>Обновить уведомление</h1>
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
         {% csrf_token %}
         {{ detail_form.as_div }}
         {{ form.as_div }}

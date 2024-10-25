@@ -1,20 +1,22 @@
 import requests
 import firebase_admin
+from django.db.models import QuerySet
 from django.utils import translation
-from django.utils.translation import gettext_lazy as _
 from firebase_admin import messaging
 from rest_framework import status
+from pymongo.synchronous.collection import Collection
 
 from config.mongo import get_mongo_client
 from generics.services import BaseService
 from loguru_conf import logger
-from notifications.models import UserDevice
+from notifications.models import UserDevice, Notification
+from notifications.serializers import NotificationSerializer
 from system_msg import (
     REQUIRED_FIELD,
     USER_NOT_FOUND,
     NOTIFACTIONS_DISALLOWED,
 )
-
+from utils import get_env
 
 session = requests.Session()
 session.trust_env = False
@@ -141,3 +143,71 @@ class NotificationRecievedService(BaseService):
         data = request.data
         data, status_code = self.receive_notification(data)
         return data, status_code
+
+
+class NotificationsListService(BaseService):
+    def get_notification_ids(
+            self,
+            subs_id: str,
+            user: UserDevice,
+            collection: Collection,
+            env: str
+    ) -> list:
+        """
+        Get notification ids from mongo db by subs_id
+        """
+        bill_group = f"{env}bill_corp" if user.bill_group == 1 else f"{env}bill_individ"
+        logger.debug(f"bill group: {bill_group}")
+        query = {
+            "$or": [
+                {"$and": [{"by_topic": True}, {"topic_name": f"{env}all"}]},
+                {"$and": [{"by_topic": True}, {"topic_name": bill_group}]},
+                {"$and": [{"by_topic": False}, {"sent_subs": {"$in": [subs_id]}}]}
+            ]
+        }
+        docs = collection.find(
+            query, {"_id": 0, "notification_id": 1, "subs_received": 1}
+        )
+        notifications = list(docs)
+        logger.debug(f"list of docs: {notifications}")
+        return notifications
+
+    def check_if_received(self, subs_id: str, data: list[dict]) -> dict:
+        result = {}
+        for doc in data:
+            if subs_id in doc["subs_received"]:
+                result[str(doc["notification_id"])] = True
+            else:
+                result[str(doc["notification_id"])] = False
+        logger.debug(f"check if received: {result}")
+        return result
+
+    def filter_notifications(self, data: dict) -> QuerySet:
+        data = data.keys()
+        notifications = Notification.objects.filter(id__in=data)
+        logger.debug(f"notifications: {notifications}")
+        return notifications
+
+    def prepare_json(self, data: QuerySet, docs: dict) -> list:
+        serializer = NotificationSerializer(data, many=True)
+        data = serializer.data
+        result = [
+            {**notification, 'subs_received': docs[str(notification["id"])]}
+            for notification in data
+        ]
+        logger.debug(f"result: {result}")
+        return result
+
+    def execute(self) -> tuple[list, int]:
+        client = get_mongo_client()
+        request = self.context.get("request")
+        env = get_env(request)
+        subs_id = request.query_params.get("subs_id")
+        user = UserDevice.objects.get(subs_id=subs_id)
+        notification_col = client["notifications"]
+        logger.debug(f"type of notif collec: {type(notification_col)}")
+        data = self.get_notification_ids(subs_id, user, notification_col, env)
+        docs = self.check_if_received(subs_id, data)
+        notifications = self.filter_notifications(docs)
+        res_data = self.prepare_json(notifications, docs)
+        return res_data, status.HTTP_200_OK

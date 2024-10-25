@@ -25,6 +25,7 @@ from notifications.models import (
     DetailInfo
 )
 from notifications.tasks import send_notification_by_topic
+from utils import get_env
 
 
 class SendNotificationView(APIView):
@@ -37,12 +38,12 @@ class SendNotificationView(APIView):
             return Response(result, status=status.HTTP_400_BAD_REQUEST)
 
 
-class NotificationsAPIView(generics.ListCreateAPIView):
+class NotificationsAPIView(ServiceRequestMixin, generics.ListAPIView):
     queryset = Notification.objects.all()
     serializer_class = serializers.NotificationSerializer
-    service_class = notifications_service.NotificationService
-    
-    
+    service = notify_service.NotificationsListService
+
+
 class UserDeviceAPIView(ServiceCreateModelMixin, generics.CreateAPIView):
     queryset = UserDevice.objects.all()
     serializer_class = serializers.UserDeviceSerializer
@@ -85,24 +86,25 @@ def notif_create(request):
         - all (for test environment)
         - prod_all (prod environment)
     """
-    host = request.get_host()
-    prod_env = "prod_" if "test" not in host else ""
+    env = get_env(request)
     if request.method == 'POST':
         form = NotificationForm(request.POST)
         detail_form = DetailInfoForm(request.POST, request.FILES)
         if form.is_valid() and detail_form.is_valid():
             # save detail form first
+            logger.debug(f"detail: {detail_form.cleaned_data}")
             detail = detail_form.save()
             notification = form.save(commit=False)
             notification.detail = detail
             notification.save()
-            
+
             # cleaned data for creating task
             data = form.cleaned_data
+            data["notification_id"] = notification.id
             date = data.pop("date")
             del data["category"]
             topic = data.pop("topic")
-            topic_name = f"{prod_env}{topic.value}"
+            topic_name = f"{env}{topic.value}"
             logger.debug(f"notification data {topic_name}: {data}")
             send_notification_by_topic.apply_async(
                 args=[topic_name, data],
@@ -122,10 +124,10 @@ def notifications_list(request):
     logger.debug(f"host splitted: {host.split(':')}")
     model_list = Notification.objects.all().order_by("created_at")  # Fetch all objects
     paginator = Paginator(model_list, 10)  # Show 10 items per page
-    
+
     page_number = request.GET.get('page')  # Get the page number from the query parameters
     page_obj = paginator.get_page(page_number)  # Get the paginated page object
-    
+
     context = {
         'page_obj': page_obj
     }
@@ -135,7 +137,7 @@ def notifications_list(request):
 def notification_update(request, pk):
     notification = get_object_or_404(Notification, pk=pk)
     detail_instance = get_object_or_404(
-        DetailInfo, 
+        DetailInfo,
         pk=notification.detail.id
     )
     if request.method == 'POST':

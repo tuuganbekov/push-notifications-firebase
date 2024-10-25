@@ -20,6 +20,7 @@ django-markdownx = "*"
 requests-toolbelt = "*"
 pillow = "*"
 psycopg2-binary = "*"
+pytz = "*"
 
 [dev-packages]
 

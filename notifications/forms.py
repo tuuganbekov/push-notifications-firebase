@@ -11,6 +11,7 @@ from notifications.models import (
 
 
 class DetailInfoForm(forms.ModelForm):
+    # image = forms.ImageField()
     body = MarkdownxFormField(label=_("Текст внутри раздела"))
     class Meta:
         model = DetailInfo
